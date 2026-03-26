@@ -111,15 +111,24 @@ echo.
 echo [%STEP%] Install %APP_NAME%
 winget install --id "%APP_ID%" -e --accept-package-agreements --accept-source-agreements
 set "WINGET_EXIT=%errorlevel%"
-if not "%WINGET_EXIT%"=="0" (
-  echo [ERROR] %APP_NAME% Install Failed
-  echo [ERROR] winget Exit Code %WINGET_EXIT%
-  echo [ERROR] Package ID %APP_ID%
-  echo [ERROR] Check Admin Access Network Status and Existing Install Conflicts
-  exit /b 1
+if "%WINGET_EXIT%"=="0" (
+  echo [OK] %APP_NAME% Installed
+  exit /b 0
 )
-echo [OK] %APP_NAME% Installed
-exit /b 0
+call :verify_installed_state "%APP_ID%"
+if "%errorlevel%"=="0" (
+  echo [OK] %APP_NAME% Already Installed
+  exit /b 0
+)
+echo [ERROR] %APP_NAME% Install Failed
+echo [ERROR] winget Exit Code %WINGET_EXIT%
+echo [ERROR] Package ID %APP_ID%
+echo [ERROR] Check Admin Access Network Status and Existing Install Conflicts
+exit /b 1
+
+:verify_installed_state
+winget list --id "%~1" -e >nul 2>nul
+exit /b %errorlevel%
 
 :verify_command
 set "CMD_NAME=%~1"
