@@ -23,11 +23,10 @@ Raw file:
 
 `https://raw.githubusercontent.com/JaeHyukSuk/win-dev-setup/master/windows_dev_tools_setup.bat`
 
-## PowerShell Download
+## CMD Download
 
-```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/JaeHyukSuk/win-dev-setup/master/windows_dev_tools_setup.bat" -OutFile "windows_dev_tools_setup.bat"
-.\windows_dev_tools_setup.bat
+```bat
+curl -L "https://raw.githubusercontent.com/JaeHyukSuk/win-dev-setup/master/windows_dev_tools_setup.bat" -o windows_dev_tools_setup.bat && windows_dev_tools_setup.bat
 ```
 
 ## Notes
@@ -35,3 +34,4 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/JaeHyukSuk/win-dev-set
 - Some tools may need a new terminal window before commands are available.
 - The script uses `winget` where possible.
 - The optional npm CLI install is included but immediate verification is skipped on purpose.
+- The one-line download command above assumes `curl` is available in `cmd`.
