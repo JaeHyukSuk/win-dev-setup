@@ -84,17 +84,8 @@ call :set_windows_terminal_default_cmd
 if errorlevel 1 goto FAILED
 
 call :next_step "Install Optional CLI Tool"
-call npm install -g @openai/codex
-set "CODEX_INSTALL_EXIT=%errorlevel%"
-if not "%CODEX_INSTALL_EXIT%"=="0" (
-  echo [ERROR] Optional CLI Tool Install Failed
-  echo [ERROR] npm Exit Code %CODEX_INSTALL_EXIT%
-  echo [ERROR] Check Node.js npm Network Access and npm Permissions
-  goto FAILED
-)
-echo [OK] Optional CLI Tool Installed
-echo [INFO] CLI Tool Verification Skipped
-echo [INFO] Open a New Terminal to Use the Installed CLI Tool
+call :install_optional_codex_cli
+if errorlevel 1 goto FAILED
 
 echo [OK] FFmpeg Installed
 echo [INFO] FFmpeg Verification Skipped
@@ -121,7 +112,7 @@ set "APP_NAME=%~1"
 set "APP_ID=%~2"
 echo.
 echo [%STEP%] Install %APP_NAME%
-winget install --id "%APP_ID%" -e --accept-package-agreements --accept-source-agreements
+winget install --id "%APP_ID%" -e --source winget --accept-package-agreements --accept-source-agreements
 set "WINGET_EXIT=%errorlevel%"
 if "%WINGET_EXIT%"=="0" (
   echo [OK] %APP_NAME% Installed
@@ -139,7 +130,7 @@ echo [ERROR] Check Admin Access Network Status and Existing Install Conflicts
 exit /b 1
 
 :verify_installed_state
-winget list --id "%~1" -e >nul 2>nul
+winget list --id "%~1" -e --source winget >nul 2>nul
 exit /b %errorlevel%
 
 :verify_command
@@ -156,13 +147,33 @@ echo [OK] %DISPLAY_NAME% Verified
 exit /b 0
 
 :set_windows_terminal_default_cmd
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$packageRoot = Join-Path $env:LOCALAPPDATA 'Packages'; $terminalDir = Get-ChildItem -Path $packageRoot -Directory -Filter 'Microsoft.WindowsTerminal_*' | Select-Object -First 1; if (-not $terminalDir) { Write-Error 'Windows Terminal package directory not found'; exit 1 }; $settingsPath = Join-Path $terminalDir.FullName 'LocalState\settings.json'; if (-not (Test-Path $settingsPath)) { $settingsDir = Split-Path $settingsPath; New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null; '{}' | Set-Content -Path $settingsPath -Encoding UTF8 }; $raw = Get-Content -Raw -Path $settingsPath; if ([string]::IsNullOrWhiteSpace($raw)) { $raw = '{}' }; $settings = $raw | ConvertFrom-Json -Depth 100 -AsHashtable; if (-not $settings) { $settings = @{} }; if (-not $settings.ContainsKey('profiles') -or -not ($settings['profiles'] -is [System.Collections.IDictionary])) { $settings['profiles'] = @{} }; $profiles = $settings['profiles']; if (-not $profiles.ContainsKey('defaults')) { $profiles['defaults'] = @{} }; $cmdGuid = '{0caa0dad-35be-5f56-a8ff-afceeeaa6101}'; $profiles['defaults']['source'] = $null; $settings['defaultProfile'] = $cmdGuid; $json = $settings | ConvertTo-Json -Depth 100; [System.IO.File]::WriteAllText($settingsPath, $json, [System.Text.UTF8Encoding]::new($false))"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $packageRoot = Join-Path $env:LOCALAPPDATA 'Packages'; $terminalDir = Get-ChildItem -Path $packageRoot -Directory -Filter 'Microsoft.WindowsTerminal_*' | Select-Object -First 1; if (-not $terminalDir) { throw 'Windows Terminal package directory not found' }; $settingsPath = Join-Path $terminalDir.FullName 'LocalState\settings.json'; if (-not (Test-Path $settingsPath)) { $settingsDir = Split-Path $settingsPath; New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null; '{}' | Set-Content -Path $settingsPath -Encoding UTF8 }; $raw = Get-Content -Raw -Path $settingsPath; if ([string]::IsNullOrWhiteSpace($raw)) { $raw = '{}' }; $settings = $raw | ConvertFrom-Json; if (-not $settings) { $settings = New-Object psobject }; if (-not ($settings.PSObject.Properties.Name -contains 'profiles') -or $settings.profiles -eq $null) { $settings | Add-Member -NotePropertyName profiles -NotePropertyValue (New-Object psobject) -Force }; if (-not ($settings.profiles -is [psobject])) { $settings.profiles = New-Object psobject }; if (-not ($settings.profiles.PSObject.Properties.Name -contains 'defaults') -or $settings.profiles.defaults -eq $null) { $settings.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue (New-Object psobject) -Force }; if (-not ($settings.profiles.defaults -is [psobject])) { $settings.profiles.defaults = New-Object psobject }; if ($settings.profiles.defaults.PSObject.Properties.Name -contains 'source') { $settings.profiles.defaults.PSObject.Properties.Remove('source') }; $cmdGuid = '{0caa0dad-35be-5f56-a8ff-afceeeaa6101}'; $settings | Add-Member -NotePropertyName defaultProfile -NotePropertyValue $cmdGuid -Force; $json = $settings | ConvertTo-Json -Depth 100; [System.IO.File]::WriteAllText($settingsPath, $json, [System.Text.UTF8Encoding]::new($false))"
 if errorlevel 1 (
   echo [ERROR] Failed to Configure Windows Terminal Default Profile
   echo [ERROR] Check Windows Terminal Settings File Permissions
   exit /b 1
 )
 echo [OK] Windows Terminal Default Profile Set to Command Prompt
+exit /b 0
+
+:install_optional_codex_cli
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Process -Name codex -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
+if "%errorlevel%"=="0" (
+  echo [WARN] Codex CLI Update Skipped Because codex.exe Is Currently Running
+  echo [INFO] Close Running Codex Sessions and Re-Run to Update the Global codex CLI
+  exit /b 0
+)
+call npm install -g @openai/codex
+set "CODEX_INSTALL_EXIT=%errorlevel%"
+if not "%CODEX_INSTALL_EXIT%"=="0" (
+  echo [ERROR] Optional CLI Tool Install Failed
+  echo [ERROR] npm Exit Code %CODEX_INSTALL_EXIT%
+  echo [ERROR] Check Node.js npm Network Access and npm Permissions
+  exit /b 1
+)
+echo [OK] Optional CLI Tool Installed
+echo [INFO] CLI Tool Verification Skipped
+echo [INFO] Open a New Terminal to Use the Installed CLI Tool
 exit /b 0
 
 :launch_windows_terminal_cmd
