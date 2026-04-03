@@ -52,6 +52,9 @@ if errorlevel 1 goto FAILED
 call :install_with_winget "FFmpeg" "Gyan.FFmpeg"
 if errorlevel 1 goto FAILED
 
+call :install_with_winget "Windows Terminal" "Microsoft.WindowsTerminal"
+if errorlevel 1 goto FAILED
+
 call :next_step "Update PATH for This Session"
 if exist "%ProgramFiles%\Git\cmd" set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
 if exist "%ProgramFiles%\GitHub CLI" set "PATH=%ProgramFiles%\GitHub CLI;%PATH%"
@@ -59,6 +62,7 @@ if exist "%ProgramFiles%\nodejs" set "PATH=%ProgramFiles%\nodejs;%PATH%"
 if exist "%LocalAppData%\Programs\Python\Python312" set "PATH=%LocalAppData%\Programs\Python\Python312;%LocalAppData%\Programs\Python\Python312\Scripts;%PATH%"
 if exist "%ProgramFiles%\FFmpeg\bin" set "PATH=%ProgramFiles%\FFmpeg\bin;%PATH%"
 if exist "%LocalAppData%\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-release-essentials\bin" set "PATH=%LocalAppData%\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-release-essentials\bin;%PATH%"
+if exist "%LocalAppData%\Microsoft\WindowsApps" set "PATH=%LocalAppData%\Microsoft\WindowsApps;%PATH%"
 echo [INFO] PATH Updated for This Session
 
 call :next_step "Check Installed Commands"
@@ -71,6 +75,12 @@ if errorlevel 1 goto FAILED
 call :verify_command "npm" "npm"
 if errorlevel 1 goto FAILED
 call :verify_command "python" "Python"
+if errorlevel 1 goto FAILED
+call :verify_command "wt" "Windows Terminal"
+if errorlevel 1 goto FAILED
+
+call :next_step "Set Windows Terminal Default Profile to Command Prompt"
+call :set_windows_terminal_default_cmd
 if errorlevel 1 goto FAILED
 
 call :next_step "Install Optional CLI Tool"
@@ -96,10 +106,12 @@ echo Tool Setup Complete
 echo Suggested Manual Checks
 echo   gh auth login
 echo   codex
+echo   wt
 echo   ffmpeg -version
 echo   python --version
 echo ============================================================
 echo.
+call :launch_windows_terminal_cmd
 pause
 exit /b 0
 
@@ -141,6 +153,23 @@ if errorlevel 1 (
 )
 where %CMD_NAME%
 echo [OK] %DISPLAY_NAME% Verified
+exit /b 0
+
+:set_windows_terminal_default_cmd
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$packageRoot = Join-Path $env:LOCALAPPDATA 'Packages'; $terminalDir = Get-ChildItem -Path $packageRoot -Directory -Filter 'Microsoft.WindowsTerminal_*' | Select-Object -First 1; if (-not $terminalDir) { Write-Error 'Windows Terminal package directory not found'; exit 1 }; $settingsPath = Join-Path $terminalDir.FullName 'LocalState\settings.json'; if (-not (Test-Path $settingsPath)) { $settingsDir = Split-Path $settingsPath; New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null; '{}' | Set-Content -Path $settingsPath -Encoding UTF8 }; $raw = Get-Content -Raw -Path $settingsPath; if ([string]::IsNullOrWhiteSpace($raw)) { $raw = '{}' }; $settings = $raw | ConvertFrom-Json -Depth 100 -AsHashtable; if (-not $settings) { $settings = @{} }; if (-not $settings.ContainsKey('profiles') -or -not ($settings['profiles'] -is [System.Collections.IDictionary])) { $settings['profiles'] = @{} }; $profiles = $settings['profiles']; if (-not $profiles.ContainsKey('defaults')) { $profiles['defaults'] = @{} }; $cmdGuid = '{0caa0dad-35be-5f56-a8ff-afceeeaa6101}'; $profiles['defaults']['source'] = $null; $settings['defaultProfile'] = $cmdGuid; $json = $settings | ConvertTo-Json -Depth 100; [System.IO.File]::WriteAllText($settingsPath, $json, [System.Text.UTF8Encoding]::new($false))"
+if errorlevel 1 (
+  echo [ERROR] Failed to Configure Windows Terminal Default Profile
+  echo [ERROR] Check Windows Terminal Settings File Permissions
+  exit /b 1
+)
+echo [OK] Windows Terminal Default Profile Set to Command Prompt
+exit /b 0
+
+:launch_windows_terminal_cmd
+where wt >nul 2>nul
+if errorlevel 1 exit /b 0
+start "" wt -p "Command Prompt"
+echo [INFO] Windows Terminal Launched with Command Prompt
 exit /b 0
 
 :next_step
